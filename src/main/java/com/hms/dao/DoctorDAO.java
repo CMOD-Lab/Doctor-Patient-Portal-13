@@ -6,8 +6,12 @@ import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 
-//import javax.security.auth.message.callback.PrivateKeyCallback.Request;
-import javax.servlet.http.HttpSession;
+// cr-java-0065: The unused javax.servlet.http.HttpSession import has been removed.
+// Session state management for this application is handled at the servlet layer
+// via Spring Session backed by Amazon ElastiCache for Redis (see
+// com.hms.config.SpringSessionConfig and the springSessionRepositoryFilter in
+// web.xml).  DoctorDAO is a pure data-access object and does not interact with
+// HttpSession directly.
 
 import com.hms.entity.Doctor;
 

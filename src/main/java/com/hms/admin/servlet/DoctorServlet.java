@@ -13,6 +13,19 @@ import com.hms.dao.DoctorDAO;
 import com.hms.db.DBConnection;
 import com.hms.entity.Doctor;
 
+/**
+ * DoctorServlet – session state is now stored in Amazon ElastiCache for Redis
+ * via Spring Session.  The HttpSession API is unchanged; Spring Session
+ * transparently replaces the in-process session store with a distributed Redis
+ * store, eliminating server affinity and enabling horizontal scaling.
+ *
+ * Required configuration (application.properties / environment variables):
+ *   REDIS_HOST  – ElastiCache primary endpoint  (default: localhost)
+ *   REDIS_PORT  – ElastiCache port              (default: 6379)
+ *
+ * Spring Session is activated by @EnableRedisHttpSession on
+ * com.hms.config.SpringSessionConfig.
+ */
 @WebServlet("/addDoctor")
 public class DoctorServlet extends HttpServlet{
 
@@ -37,6 +50,10 @@ public class DoctorServlet extends HttpServlet{
 			
 			boolean f = docDAO.registerDoctor(doctor);
 
+			// HttpSession is now backed by Amazon ElastiCache for Redis through
+			// Spring Session – feedback messages (successMsg / errorMsg) are stored
+			// in the distributed Redis store, ensuring they are visible regardless
+			// of which application instance handles the subsequent request.
 			HttpSession session = req.getSession();
 			
 			if(f==true) {

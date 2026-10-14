@@ -1,15 +1,46 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
+
+	<!--
+		cr-java-0107 – WAR Packaging → Executable JAR with Embedded Tomcat
+		Spring Boot parent BOM manages all Spring/Tomcat dependency versions
+		and provides the spring-boot-maven-plugin for building a self-contained
+		executable JAR suitable for Amazon ECS, EKS, and AWS Fargate deployment.
+	-->
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>2.7.18</version>
+		<relativePath/>
+	</parent>
+
 	<groupId>com.hms</groupId>
 	<artifactId>Doctor-Patient-Portal</artifactId>
-	<packaging>war</packaging>
+	<!-- cr-java-0107: Changed from 'war' to 'jar' for executable JAR packaging -->
+	<packaging>jar</packaging>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>Doctor-Patient-Portal Maven Webapp</name>
 	<url>http://maven.apache.org</url>
 	<properties>
 		<maven.compiler.source>1.8</maven.compiler.source>
 		<maven.compiler.target>1.8</maven.compiler.target>
+		<!-- AWS SDK BOM version for consistent dependency management -->
+		<aws.sdk.version>2.20.68</aws.sdk.version>
 	</properties>
+
+	<dependencyManagement>
+		<dependencies>
+			<!-- AWS SDK v2 BOM – manages all AWS SDK module versions consistently -->
+			<dependency>
+				<groupId>software.amazon.awssdk</groupId>
+				<artifactId>bom</artifactId>
+				<version>${aws.sdk.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
 	<dependencies>
 		<dependency>
 			<groupId>junit</groupId>
@@ -18,21 +49,27 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!--
+			cr-java-0107 – Embedded Tomcat via Spring Boot Web starter.
+			Replaces the external servlet container dependency (javax.servlet-api
+			with scope=provided) with an embedded Tomcat server bundled inside
+			the executable JAR. No external application server is required.
+		-->
 		<dependency>
-			<groupId>javax.servlet</groupId>
-			<artifactId>javax.servlet-api</artifactId>
-			<version>4.0.1</version>
-			<scope>provided</scope>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 
-		<!-- https://mvnrepository.com/artifact/mysql/mysql-connector-java -->
+		<!--
+			cr-java-0107 – Embedded Tomcat JSP / JSTL support.
+			Provides Jasper (JSP engine) and JSTL inside the embedded Tomcat
+			so that existing JSP views continue to work without an external server.
+		-->
 		<dependency>
-			<groupId>mysql</groupId>
-			<artifactId>mysql-connector-java</artifactId>
-			<version>8.0.28</version>
+			<groupId>org.apache.tomcat.embed</groupId>
+			<artifactId>tomcat-embed-jasper</artifactId>
 		</dependency>
 
-		<!-- https://mvnrepository.com/artifact/javax.servlet/jstl -->
 		<dependency>
 			<groupId>javax.servlet</groupId>
 			<artifactId>jstl</artifactId>
@@ -46,14 +83,109 @@
 			<version>3.0.0</version>
 		</dependency>
 
+		<!-- https://mvnrepository.com/artifact/mysql/mysql-connector-java -->
+		<dependency>
+			<groupId>mysql</groupId>
+			<artifactId>mysql-connector-java</artifactId>
+			<version>8.0.28</version>
+		</dependency>
+
+		<!--
+			HikariCP – high-performance JDBC connection pool (cr-java-0073 - Direct JDBC Connections)
+			Replaces raw DriverManager.getConnection() calls with a managed connection pool.
+			Used together with Amazon RDS Proxy for optimized cloud database connections.
+			Connection parameters (DB_URL, DB_USERNAME, DB_PASSWORD) are supplied via
+			environment variables at runtime – no credentials are hard-coded.
+		-->
+		<dependency>
+			<groupId>com.zaxxer</groupId>
+			<artifactId>HikariCP</artifactId>
+			<version>4.0.3</version>
+		</dependency>
+
+		<!--
+			AWS Secrets Manager SDK (cr-java-0113 - Lack of Externalized Secrets)
+			Enables retrieval of credentials, API keys, and sensitive configuration
+			values from AWS Secrets Manager instead of embedding them in source code
+			or property files.
+		-->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>secretsmanager</artifactId>
+			<!-- version managed by the AWS SDK BOM above -->
+		</dependency>
+
+		<!-- AWS SDK core HTTP client required by secretsmanager module -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>apache-client</artifactId>
+			<!-- version managed by the AWS SDK BOM above -->
+		</dependency>
+
+		<!--
+			cr-java-0065 – HTTP Session State Storage
+			Spring Session Data Redis: replaces the in-process HttpSession store
+			with Amazon ElastiCache for Redis, enabling stateless application
+			instances and safe horizontal scaling.
+		-->
+		<dependency>
+			<groupId>org.springframework.session</groupId>
+			<artifactId>spring-session-data-redis</artifactId>
+			<version>2.7.4</version>
+		</dependency>
+
+		<!--
+			Spring Data Redis – required by spring-session-data-redis for the
+			RedisTemplate and connection factory abstractions.
+		-->
+		<dependency>
+			<groupId>org.springframework.data</groupId>
+			<artifactId>spring-data-redis</artifactId>
+			<version>2.7.14</version>
+		</dependency>
+
+		<!--
+			Lettuce – non-blocking Redis client recommended for AWS ElastiCache.
+			Used by LettuceConnectionFactory in SpringSessionConfig.
+		-->
+		<dependency>
+			<groupId>io.lettuce</groupId>
+			<artifactId>lettuce-core</artifactId>
+			<version>6.2.6.RELEASE</version>
+		</dependency>
+
+		<!--
+			Spring Context – required for @Configuration, @Bean, and
+			@EnableRedisHttpSession support in SpringSessionConfig.
+		-->
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-context</artifactId>
+			<version>5.3.29</version>
+		</dependency>
+
+		<!--
+			Spring Web – provides the DelegatingFilterProxy that Spring Session
+			uses to intercept HttpSession calls in the servlet container.
+		-->
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-web</artifactId>
+			<version>5.3.29</version>
+		</dependency>
 
 	</dependencies>
 	<build>
 		<plugins>
+			<!--
+				cr-java-0107 – Spring Boot Maven Plugin replaces maven-war-plugin.
+				Repackages the compiled classes into a self-contained executable JAR
+				that embeds Tomcat, enabling direct deployment on Amazon ECS, EKS,
+				or AWS Fargate without an external application server.
+			-->
 			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-war-plugin</artifactId>
-				<version>3.3.1</version>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
 		</plugins>
 		<finalName>Doctor-Patient-Portal</finalName>
